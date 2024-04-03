@@ -24,21 +24,24 @@ def main() -> None:
         images: List[str] = [file for file in sorted(os.listdir(
             images_dir)) if file.lower().endswith(f".{extension}")]
 
-        results = []
-        for image in images:
+        results: List[str] = []
+        last_barcode: str = ""
+        for i, image in enumerate(images):
             print(f"Process {image}:")
             image_path: str = os.path.join(images_dir, image)
-            res, new_image_path = find_barcodes_and_rename_file(image_path)
-            results.append(f"{str(res)}\t{image_path}\t{new_image_path}")
+            res, new_image_path, last_barcode = find_barcodes_and_rename_file(
+                image_path, last_barcode, i)
+
             match res:
                 case DecodingResult.UNREADABLE:
-                    print(f"Unable to read barcode in the image '{
-                          image_path}'\n")
+                    print(f"Unable to read barcode in image '{image_path}'\n")
                 case DecodingResult.UNIQUE:
                     print(f"Code found and image '{
                           image_path}' renamed to '{new_image_path}'\n")
                 case DecodingResult.MULTIPLE:
                     print(f"Multiple barcodes found: {new_image_path}\n")
+
+            results.append(f"{str(res)}\t{image_path}\t{new_image_path}")
 
         with open(results_file, "w") as file:
             file.write("\n".join(results))
@@ -47,23 +50,22 @@ def main() -> None:
 DecodingResult = Enum("DecodingResult", ["UNREADABLE", "UNIQUE", "MULTIPLE"])
 
 
-def find_barcodes_and_rename_file(image_path: str) -> Tuple[DecodingResult, str]:
-    barcodes = find_barcodes(image_path)
+def find_barcodes_and_rename_file(image_path: str, last_barcode: str, i: int) -> Tuple[DecodingResult, str, str]:
+    barcodes = [b.data for b in find_barcodes(
+        image_path) if b.type == "CODE128" and len(b.data) != 0]
     if len(barcodes) == 0:
-        return DecodingResult.UNREADABLE, ""
-    elif len(barcodes) == 1:
-        new_image_path = rename_file(
-            image_path, barcodes[0].data.decode("utf-8"))
-        return DecodingResult.UNIQUE, new_image_path
-    else:
-        barcodes_data = [b.data for b in barcodes if b.type ==
-                         "CODE128" and len(b.data) != 0]
-        if len(barcodes_data) == 1:
-            new_image_path = rename_file(
-                image_path, barcodes_data[0].decode("utf-8"))
-            return DecodingResult.UNIQUE, new_image_path
+        if i == 0:
+            return DecodingResult.UNREADABLE, "", ""
         else:
-            return DecodingResult.MULTIPLE, str(barcodes_data)
+            barcode = make_next_name(last_barcode)
+            new_image_path = rename_file(image_path, barcode)
+            return DecodingResult.UNREADABLE, new_image_path, barcode
+    elif len(barcodes) == 1:
+        barcode = barcodes[0].decode("utf-8")
+        new_image_path = rename_file(image_path, barcode)
+        return DecodingResult.UNIQUE, new_image_path, barcode
+    else:
+        return DecodingResult.MULTIPLE, str(barcodes), ""
 
 
 def find_barcodes(image_path: str) -> List[Decoded]:
@@ -89,6 +91,14 @@ def make_new_name(image_path: str, barcode: str) -> str:
     new_image_name = f"{barcode}{ext}"
     new_image_path = os.path.join(os.path.dirname(image_path), new_image_name)
     return new_image_path
+
+
+def make_next_name(last_barcode: str) -> str:
+    if "_" not in last_barcode:
+        return f"{last_barcode}_a"
+    else:
+        base, incr = tuple(last_barcode.split('_'))
+        return f"{base}_{chr(ord(incr) + 1)}"
 
 
 if __name__ == "__main__":
