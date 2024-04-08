@@ -1,8 +1,8 @@
 # Renamator
 
-Find barcode in image file with [opencv](https://pypi.org/project/opencv-python/) and [pyzbar](https://pypi.org/project/pyzbar/) libraries and rename it to the barcode value.
+Find barcodes and datamatrix in image file with [opencv](https://pypi.org/project/opencv-python/), [pyzbar](https://pypi.org/project/pyzbar/) and [pylibdmtx](https://pypi.org/project/pylibdmtx/) libraries and rename it to the barcode value.
 
-Coded with Python 3.12.2.
+Coded with Python 3.10.14
 
 Run like this :
 
