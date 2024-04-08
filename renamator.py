@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import os
-import sys
+import argparse
 import cv2
 from pyzbar.pyzbar import decode as zbar_decode  # type: ignore
 from pylibdmtx.pylibdmtx import decode as dm_decode  # type: ignore
@@ -15,46 +15,43 @@ from cv2 import UMat
 
 
 def main() -> None:
-    if len(sys.argv) < 3:
-        print(
-            f"To run : {sys.argv[0]} <images_dir> <results_file> <place> <extension>, ex: ")
-        print(f"{sys.argv[0]} images res.tsv geneve tif")
-        print(f"Available places: {[p.name.lower() for p in Place]}")
-    else:
-        images_dir: str = sys.argv[1]
-        results_file: str = sys.argv[2]
-        place_str: str = sys.argv[3]
-        extension: str = sys.argv[4]
+    parser = argparse.ArgumentParser(
+        prog="Renamator",
+        description="Find barcodes and datamatrix in image and rename it to the barcode value.")
+    parser.add_argument("images_dir",
+                        help="Directory containing images to rename")
+    parser.add_argument("results_file",
+                        help="File where exectuion results are logged")
+    parser.add_argument("-p", "--place", required=False, choices=[p.name.lower() for p in Place],
+                        default=Place.GENEVE.name.lower(), help="Images provenance (default geneve)")
+    parser.add_argument("-e", "--extension", required=False, default="tif",
+                        help="Image file extension (default tif)")
+    args = parser.parse_args()
 
-        try:
-            place: Place = Place[place_str.upper()]
-        except KeyError:
-            print(f"Place '{place_str}' not exists")
-            exit(1)
+    place: Place = Place[args.place.upper()]
+    images: List[str] = [file for file in sorted(os.listdir(
+        args.images_dir)) if file.lower().endswith(f".{args.extension}")]
 
-        images: List[str] = [file for file in sorted(os.listdir(
-            images_dir)) if file.lower().endswith(f".{extension}")]
+    results: List[str] = []
+    last_barcode: str = ""
+    for i, image in enumerate(images):
+        print(f"Process '{image}':")
+        image_path: str = os.path.join(args.images_dir, image)
+        res, new_image_path, last_barcode = find_barcodes_and_rename_file(
+            place, image_path, last_barcode, i)
 
-        results: List[str] = []
-        last_barcode: str = ""
-        for i, image in enumerate(images):
-            print(f"Process '{image}':")
-            image_path: str = os.path.join(images_dir, image)
-            res, new_image_path, last_barcode = find_barcodes_and_rename_file(
-                place, image_path, last_barcode, i)
+        match res:
+            case DecodingResult.UNREADABLE:
+                print(f"Unable to read barcode in image '{image}'\n")
+            case DecodingResult.UNIQUE:
+                print(f"Code found: '{last_barcode}'\n")
+            case DecodingResult.MULTIPLE:
+                print(f"Multiple barcodes found: {last_barcode}\n")
 
-            match res:
-                case DecodingResult.UNREADABLE:
-                    print(f"Unable to read barcode in image '{image}'\n")
-                case DecodingResult.UNIQUE:
-                    print(f"Code found: '{last_barcode}'\n")
-                case DecodingResult.MULTIPLE:
-                    print(f"Multiple barcodes found: {last_barcode}\n")
+        results.append(f"{str(res)}\t{image_path}\t{new_image_path}")
 
-            results.append(f"{str(res)}\t{image_path}\t{new_image_path}")
-
-        with open(results_file, "w") as file:
-            file.write("\n".join(results))
+    with open(args.results_file, "w") as file:
+        file.write("\n".join(results))
 
 
 Place = Enum("Place", ["GENEVE", "SION"])
