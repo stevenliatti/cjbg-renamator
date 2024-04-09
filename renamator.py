@@ -12,26 +12,44 @@ from pyzbar.pyzbar import Decoded  # type: ignore
 from typing import List
 from typing import Tuple
 from cv2 import UMat
+from argparse import Namespace
 
 
 def main() -> None:
+    args = parse_args()
+    images: List[str] = [file for file in sorted(os.listdir(
+        args.images_dir)) if file.lower().endswith(f".{args.extension}")]
+    results: List[str] = process_images(args, images)
+    with open(args.results_file, "w") as file:
+        file.write("\n".join(results))
+
+
+Place = Enum("Place", ["GENEVE", "SION"])
+DecodingResult = Enum("DecodingResult", ["UNREADABLE", "UNIQUE", "MULTIPLE"])
+
+
+def parse_args() -> Namespace:
     parser = argparse.ArgumentParser(
         prog="Renamator",
-        description="Find barcodes and datamatrix in image and rename it to the barcode value.")
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description="Find barcodes and datamatrix in images and rename it to the barcode value.",
+        epilog=f"""Examples:
+        renamator U:\\user\\images P:\\user\\res.csv
+        renamator U:\\user\\images P:\\user\\res.csv -p sion -e jpg
+        """)
     parser.add_argument("images_dir",
                         help="Directory containing images to rename")
     parser.add_argument("results_file",
-                        help="File where exectuion results are logged")
+                        help="CSV file where execution results are logged, ex: res.csv")
     parser.add_argument("-p", "--place", required=False, choices=[p.name.lower() for p in Place],
                         default=Place.GENEVE.name.lower(), help="Images provenance (default geneve)")
     parser.add_argument("-e", "--extension", required=False, default="tif",
                         help="Image file extension (default tif)")
-    args = parser.parse_args()
+    return parser.parse_args()
 
+
+def process_images(args: Namespace, images: List[str]) -> List[str]:
     place: Place = Place[args.place.upper()]
-    images: List[str] = [file for file in sorted(os.listdir(
-        args.images_dir)) if file.lower().endswith(f".{args.extension}")]
-
     results: List[str] = []
     last_barcode: str = ""
     for i, image in enumerate(images):
@@ -49,13 +67,7 @@ def main() -> None:
                 print(f"Multiple barcodes found: {last_barcode}\n")
 
         results.append(f"{str(res)}\t{image_path}\t{new_image_path}")
-
-    with open(args.results_file, "w") as file:
-        file.write("\n".join(results))
-
-
-Place = Enum("Place", ["GENEVE", "SION"])
-DecodingResult = Enum("DecodingResult", ["UNREADABLE", "UNIQUE", "MULTIPLE"])
+    return results
 
 
 def find_barcodes_and_rename_file(place: Place, image_path: str, last_barcode: str, i: int) -> Tuple[DecodingResult, str, str]:

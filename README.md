@@ -6,4 +6,4 @@ Coded with Python 3.10.14
 
 Run like this :
 
-`python3 renamator.py <images_dir> <extension> <results_file>`
+`python3 renamator.py <images_dir> <results_file>`
