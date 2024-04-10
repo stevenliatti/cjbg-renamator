@@ -81,7 +81,8 @@ def find_barcodes_and_rename_file(place: Place, image_path: str, last_barcode: s
 
     if len(barcodes) == 0:
         if i == 0:
-            return DecodingResult.UNREADABLE, "", ""
+            barcode = "noname"
+            return DecodingResult.UNREADABLE, barcode, barcode
         else:
             barcode = make_next_name(last_barcode)
             new_image_path = rename_file(image_path, barcode)

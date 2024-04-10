@@ -1,0 +1,2 @@
+pyinstaller --onefile --add-binary "C:\Users\liattis\AppData\Local\Programs\Python\Python310\Lib\site-packages\pyzbar\libzbar-64.dll;." --add-binary "C:\Users\liattis\AppData\Local\Programs\Python\Python310\Lib\site-packages\pyzbar\libiconv.dll;." --add-binary "C:\Users\liattis\AppData\Local\Programs\Python\Python310\Lib\site-packages\pylibdmtx\libdmtx-64.dll;." renamator.py
+PAUSE
