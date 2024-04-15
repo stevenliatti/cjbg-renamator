@@ -3,6 +3,7 @@
 import os
 import argparse
 import cv2
+from datetime import datetime
 from pyzbar.pyzbar import decode as zbar_decode  # type: ignore
 from pylibdmtx.pylibdmtx import decode as dm_decode  # type: ignore
 from enum import Enum
@@ -18,9 +19,10 @@ from argparse import Namespace
 def main() -> None:
     args = parse_args()
     images: List[str] = [file for file in sorted(os.listdir(
-        args.images_dir)) if file.lower().endswith(f".{args.extension}")]
+        args.work_dir)) if file.lower().endswith(f".{args.extension}")]
     results: List[str] = process_images(args, images)
-    with open(args.results_file, "w") as file:
+    now: str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    with open(os.path.join(args.work_dir, f"{now}_resultats.csv"), "w") as file:
         file.write("\n".join(results))
 
 
@@ -34,13 +36,11 @@ def parse_args() -> Namespace:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description="Find barcodes and datamatrix in images and rename it to the barcode value.",
         epilog=f"""Examples:
-        renamator U:\\user\\images P:\\user\\res.csv
-        renamator U:\\user\\images P:\\user\\res.csv -p sion -e jpg
+        renamator U:\\user\\images
+        renamator U:\\user\\images -p sion -e jpg
         """)
-    parser.add_argument("images_dir",
-                        help="Directory containing images to rename")
-    parser.add_argument("results_file",
-                        help="CSV file where execution results are logged, ex: res.csv")
+    parser.add_argument("work_dir",
+                        help="Directory containing images to rename. The final results are writted here too.")
     parser.add_argument("-p", "--place", required=False, choices=[p.name.lower() for p in Place],
                         default=Place.GENEVE.name.lower(), help="Images provenance (default geneve)")
     parser.add_argument("-e", "--extension", required=False, default="tif",
@@ -54,7 +54,7 @@ def process_images(args: Namespace, images: List[str]) -> List[str]:
     last_barcode: str = ""
     for i, image in enumerate(images):
         print(f"Process '{image}':")
-        image_path: str = os.path.join(args.images_dir, image)
+        image_path: str = os.path.join(args.work_dir, image)
         res, new_image_path, last_barcode = find_barcodes_and_rename_file(
             place, image_path, last_barcode, i)
 
