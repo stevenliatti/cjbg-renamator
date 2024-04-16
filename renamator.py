@@ -4,6 +4,7 @@ import os
 import argparse
 import cv2
 from datetime import datetime
+from filehash import FileHash  # type: ignore
 from pyzbar.pyzbar import decode as zbar_decode  # type: ignore
 from pylibdmtx.pylibdmtx import decode as dm_decode  # type: ignore
 from enum import Enum
@@ -12,18 +13,25 @@ from enum import Enum
 from pyzbar.pyzbar import Decoded  # type: ignore
 from typing import List
 from typing import Tuple
+from typing import Dict
 from cv2 import UMat
 from argparse import Namespace
 
 
 def main() -> None:
     args = parse_args()
-    images: List[str] = [file for file in sorted(os.listdir(
-        args.work_dir)) if file.lower().endswith(f".{args.extension}")]
-    results: List[str] = process_images_and_rename(args, images)
-    now: str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    with open(os.path.join(args.work_dir, f"{now}_resultats.csv"), "w") as file:
-        file.write("\n".join(results))
+    bin_dups = check_binary_duplicates(args)
+    if len(bin_dups) > 0:
+        print("ERROR: there is some binary identical files, here the list:")
+        for d in bin_dups:
+            print(d)
+    else:
+        images: List[str] = [file for file in sorted(os.listdir(
+            args.work_dir)) if file.lower().endswith(f".{args.extension}")]
+        results: List[str] = process_images_and_rename(args, images)
+        now: str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        with open(os.path.join(args.work_dir, f"{now}_resultats.csv"), "w") as file:
+            file.write("\n".join(results))
 
 
 Place = Enum("Place", ["GENEVE", "SION"])
@@ -46,6 +54,15 @@ def parse_args() -> Namespace:
     parser.add_argument("-e", "--extension", required=False, default="tif",
                         help="Image file extension (default tif)")
     return parser.parse_args()
+
+
+def check_binary_duplicates(args: Namespace) -> List[List[str]]:
+    hasher = FileHash('sha1')
+    hashes = hasher.hash_dir(args.work_dir, f"*.{args.extension}")
+    di: Dict[str, List[str]] = {}
+    for filename, hash in hashes:
+        di.setdefault(hash, []).append(filename)
+    return [vs for k, vs in di.items() if len(vs) > 1]
 
 
 def process_images_and_rename(args: Namespace, images: List[str]) -> List[str]:
@@ -107,7 +124,7 @@ def find_datamatrix(image_path: str) -> List[Decoded]:
     return datamatrix
 
 
-def to_gray_binary_image(image_path: str) -> UMat:
+def to_gray_binary_image(image_path: str):
     # Read image
     image = cv2.imread(image_path)
     # Convert color image to grayscale
