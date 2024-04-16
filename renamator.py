@@ -20,7 +20,7 @@ def main() -> None:
     args = parse_args()
     images: List[str] = [file for file in sorted(os.listdir(
         args.work_dir)) if file.lower().endswith(f".{args.extension}")]
-    results: List[str] = process_images(args, images)
+    results: List[str] = process_images_and_rename(args, images)
     now: str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     with open(os.path.join(args.work_dir, f"{now}_resultats.csv"), "w") as file:
         file.write("\n".join(results))
@@ -48,15 +48,16 @@ def parse_args() -> Namespace:
     return parser.parse_args()
 
 
-def process_images(args: Namespace, images: List[str]) -> List[str]:
+def process_images_and_rename(args: Namespace, images: List[str]) -> List[str]:
     place: Place = Place[args.place.upper()]
-    results: List[str] = []
+    results: List[str] = [f"DecodingResult\tOldName\tNewName\tIsDuplicate"]
     last_barcode: str = ""
     for i, image in enumerate(images):
         print(f"Process '{image}':")
         image_path: str = os.path.join(args.work_dir, image)
-        res, new_image_path, last_barcode = find_barcodes_and_rename_file(
-            place, image_path, last_barcode, i)
+        res, last_barcode = process_image(place, image_path, last_barcode, i)
+        new_image_path, is_duplicate = make_new_name(image_path, last_barcode)
+        os.rename(image_path, new_image_path)
 
         match res:
             case DecodingResult.UNREADABLE:
@@ -66,11 +67,12 @@ def process_images(args: Namespace, images: List[str]) -> List[str]:
             case DecodingResult.MULTIPLE:
                 print(f"Multiple barcodes found: {last_barcode}\n")
 
-        results.append(f"{str(res)}\t{image_path}\t{new_image_path}")
+        results.append(
+            f"{str(res)}\t{image_path}\t{new_image_path}\t{is_duplicate}")
     return results
 
 
-def find_barcodes_and_rename_file(place: Place, image_path: str, last_barcode: str, i: int) -> Tuple[DecodingResult, str, str]:
+def process_image(place: Place, image_path: str, last_barcode: str, i: int) -> Tuple[DecodingResult, str]:
     match place:
         case Place.GENEVE:
             barcodes = [b.data for b in find_barcodes(
@@ -82,17 +84,14 @@ def find_barcodes_and_rename_file(place: Place, image_path: str, last_barcode: s
     if len(barcodes) == 0:
         if i == 0:
             barcode = "noname"
-            return DecodingResult.UNREADABLE, barcode, barcode
         else:
             barcode = make_next_name(last_barcode)
-            new_image_path = rename_file(image_path, barcode)
-            return DecodingResult.UNREADABLE, new_image_path, barcode
+        return DecodingResult.UNREADABLE, barcode
     elif len(barcodes) == 1:
         barcode = barcodes[0].decode("utf-8")
-        new_image_path = rename_file(image_path, barcode)
-        return DecodingResult.UNIQUE, new_image_path, barcode
+        return DecodingResult.UNIQUE, barcode
     else:
-        return DecodingResult.MULTIPLE, "", str(barcodes)
+        return DecodingResult.MULTIPLE, str(barcodes)
 
 
 def find_barcodes(image_path: str) -> List[Decoded]:
@@ -118,17 +117,16 @@ def to_gray_binary_image(image_path: str) -> UMat:
     return binary_image
 
 
-def rename_file(image_path: str, barcode: str) -> str:
-    new_image_path = make_new_name(image_path, barcode)
-    os.rename(image_path, new_image_path)
-    return new_image_path
-
-
-def make_new_name(image_path: str, barcode: str) -> str:
+def make_new_name(image_path: str, new_name: str) -> Tuple[str, bool]:
     base_path, ext = os.path.splitext(image_path)
-    new_image_name = f"{barcode}{ext}"
+    new_image_name = f"{new_name}{ext}"
     new_image_path = os.path.join(os.path.dirname(image_path), new_image_name)
-    return new_image_path
+    is_duplicate = os.path.exists(new_image_path)
+    while os.path.exists(new_image_path):
+        new_image_name = f"copy-{new_image_name}"
+        new_image_path = os.path.join(
+            os.path.dirname(new_image_path), new_image_name)
+    return new_image_path, is_duplicate
 
 
 def make_next_name(last_barcode: str) -> str:
