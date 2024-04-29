@@ -2,4 +2,4 @@ opencv-python
 pyzbar
 pylibdmtx
 mypy
-filehash
+imohash

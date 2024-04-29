@@ -4,7 +4,7 @@ import os
 import argparse
 import cv2
 from datetime import datetime
-from filehash import FileHash  # type: ignore
+from imohash import hashfile  # type: ignore
 from pyzbar.pyzbar import decode as zbar_decode  # type: ignore
 from pylibdmtx.pylibdmtx import decode as dm_decode  # type: ignore
 from enum import Enum
@@ -20,14 +20,14 @@ from argparse import Namespace
 
 def main() -> None:
     args = parse_args()
-    bin_dups = check_binary_duplicates(args)
+    images: List[str] = [file_name for file_name in sorted(os.listdir(
+        args.work_dir)) if file_name.lower().endswith(f".{args.extension}")]
+    bin_dups = check_binary_duplicates(args.work_dir, images)
     if len(bin_dups) > 0:
-        print("ERROR: there is some binary identical files, here the list:")
+        print("ERROR: there is some binary identical files, here is the list:")
         for d in bin_dups:
             print(d)
     else:
-        images: List[str] = [file for file in sorted(os.listdir(
-            args.work_dir)) if file.lower().endswith(f".{args.extension}")]
         results: List[str] = process_images_and_rename(args, images)
         now: str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         with open(os.path.join(args.work_dir, f"{now}_resultats.csv"), "w") as file:
@@ -56,9 +56,9 @@ def parse_args() -> Namespace:
     return parser.parse_args()
 
 
-def check_binary_duplicates(args: Namespace) -> List[List[str]]:
-    hasher = FileHash('sha1')
-    hashes = hasher.hash_dir(args.work_dir, f"*.{args.extension}")
+def check_binary_duplicates(work_dir: str, images: List[str]) -> List[List[str]]:
+    hashes = [(image, hashfile(os.path.join(work_dir, image), hexdigest=True))
+              for image in images]
     di: Dict[str, List[str]] = {}
     for filename, hash in hashes:
         di.setdefault(hash, []).append(filename)
