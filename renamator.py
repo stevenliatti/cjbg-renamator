@@ -35,7 +35,8 @@ def main() -> None:
 
 
 Place = Enum("Place", ["GENEVE", "SION"])
-DecodingResult = Enum("DecodingResult", ["UNREADABLE", "UNIQUE", "MULTIPLE"])
+DecodingResult = Enum(
+    "DecodingResult", ["UNREADABLE", "NEED_TO_CHECK", "UNIQUE", "MULTIPLE"])
 
 
 def parse_args() -> Namespace:
@@ -75,12 +76,15 @@ def process_images_and_rename(args: Namespace, images: List[str]) -> List[str]:
         res, last_barcode = process_image(place, image_path, last_barcode, i)
         new_image_path, is_duplicate = make_new_name(image_path, last_barcode)
         os.rename(image_path, new_image_path)
+        new_image_name = os.path.basename(new_image_path)
 
         match res:
             case DecodingResult.UNREADABLE:
-                print(f"Unable to read barcode in image '{image}'\n")
+                print(f"Unable to decode, rename to '{new_image_name}'\n")
+            case DecodingResult.NEED_TO_CHECK:
+                print(f"Bad barcode value, rename to '{new_image_name}'\n")
             case DecodingResult.UNIQUE:
-                print(f"Code found: '{last_barcode}'\n")
+                print(f"Code found, rename to '{new_image_name}'\n")
             case DecodingResult.MULTIPLE:
                 print(f"Multiple barcodes found: {last_barcode}\n")
 
@@ -100,13 +104,16 @@ def process_image(place: Place, image_path: str, last_barcode: str, i: int) -> T
 
     if len(barcodes) == 0:
         if i == 0:
-            barcode = "noname"
+            return DecodingResult.UNREADABLE, "noname"
         else:
-            barcode = make_next_name(last_barcode)
-        return DecodingResult.UNREADABLE, barcode
+            return DecodingResult.UNREADABLE, make_next_name(last_barcode)
     elif len(barcodes) == 1:
         barcode = barcodes[0].decode("utf-8")
-        return DecodingResult.UNIQUE, barcode
+        forbidden_chars = ["/", "\\", "<", ">", ":", "|", "?", "*"]
+        if any(c in barcode for c in forbidden_chars) or len([c for c in barcode if 0 <= ord(c) <= 31]) != 0:
+            return DecodingResult.NEED_TO_CHECK, make_next_name(last_barcode)
+        else:
+            return DecodingResult.UNIQUE, barcode
     else:
         return DecodingResult.MULTIPLE, str(barcodes)
 
@@ -135,7 +142,7 @@ def to_gray_binary_image(image_path: str):
 
 
 def make_new_name(image_path: str, new_name: str) -> Tuple[str, bool]:
-    base_path, ext = os.path.splitext(image_path)
+    ext = os.path.splitext(image_path)[1]
     new_image_name = f"{new_name}{ext}"
     new_image_path = os.path.join(os.path.dirname(image_path), new_image_name)
     is_duplicate = os.path.exists(new_image_path)
